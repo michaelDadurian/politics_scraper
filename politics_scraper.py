@@ -6,22 +6,41 @@ from time import sleep
 #import dbm
 
 search_map = {}
+weight = {}
 #db = dbm.open('cache', 'c')
 
-search_map['thedailybeast'] = 'Daily Beast'
-search_map['rollingstone'] = 'rollingstone.com'
-search_map['newsweek'] = 'newsweek'
-search_map['nytimes'] = 'new york times'
-search_map['bloomberg'] = 'bloomberg'
-search_map['huffingtonpost'] = 'huff'
-search_map['thinkprogress'] = 'thinkprogress'
-search_map['economist'] = 'economist'
-search_map['thehill'] = 'the hill'
-search_map['washingtonpost'] = 'washington post'
-search_map['politico'] = 'politico'
-search_map['cnn'] = 'cnn'
-search_map['propublica'] = 'propublica'
-search_map['msnbc'] = 'msnbc'
+search_map['thedailybeast'] = 'Left'
+search_map['rollingstone'] = 'Left'
+search_map['newsweek'] = 'Lean Left'
+search_map['nytimes'] = 'Lean Left'
+search_map['bloomberg'] = 'Center'
+search_map['huffingtonpost'] = 'Left'
+search_map['thinkprogress'] = 'Left'
+search_map['economist'] = 'Lean Left'
+search_map['thehill'] = 'Left'
+search_map['washingtonpost'] = 'Lean Left'
+search_map['politico'] = 'Lean Left'
+search_map['cnn'] = 'Left'
+search_map['propublica'] = 'Center'
+search_map['msnbc'] = 'Left'
+search_map['wsj'] = 'Center'
+search_map['businessinsider'] = 'Center'
+search_map['theatlantic'] = 'Lean Left'
+search_map['apnews'] = 'Center'
+search_map['rawstory'] = 'Left'
+search_map['npr'] = 'Lean Left'
+search_map['politifact'] = 'Lean Left'
+search_map['washingtonexaminer'] = 'Right'
+search_map['buzzfeed'] = 'Left'
+search_map['pbs'] = 'Center'
+search_map['washingtontimes'] = 'Lean Right'
+search_map['cbsnews'] = 'Lean Left'
+search_map['abcnews'] = 'Lean Left'
+search_map['theintercept'] = 'Left'
+
+
+
+
 
 def simple_get(url):
 	try:
@@ -33,6 +52,24 @@ def simple_get(url):
 	except RequestException as e:
 		print("error during request")
 		
+def assign_weight():
+	total_points = 0
+	for k in search_map:
+		if search_map[k] == "Left":
+			total_points += -5
+		elif search_map[k] == "Right":
+			total_points += 5
+		elif search_map[k] == "Lean Left":
+			total_points -= 3
+		elif search_map[k] == "Lean Right":
+			total_points += 3
+		elif search_map[k] == "Center" or search_map[k] == "No bias found":
+			total_points += 0
+			
+	print("Points:", total_points)
+			
+			
+	
 def is_good_response(response):
 	content_type = response.headers['Content-Type'].lower()
 	print("status code:" , response.status_code)
@@ -52,7 +89,7 @@ def get_data():
 		count = 1
 		
 		for iterator in div:
-		
+			
 			div_thing = div.contents[count]
 			attributes = div_thing.attrs
 			if not div_thing == '' and div_thing.name == 'div' and 'thing' in div_thing['class']:
@@ -62,14 +99,20 @@ def get_data():
 				title = div_entry.find('a').text
 				rank = attributes['data-rank']
 				
-				get_source(link)
-				print_data(link, title, rank)
+				website = get_source(link)
+				print_data(website, title, rank)
 				
 				data.append((title,link,rank))
 				
-				
+				#if rank == 25:
+					#break
+			
 			count = count + 1
-			sleep(3)
+			if count == 51:
+				break
+			
+			
+			sleep(1)
 
 		"""
 		for each_class in html.select('div[class*="thing id-"]'):
@@ -77,7 +120,8 @@ def get_data():
 		"""
 		
 		return data
-		
+
+"""		
 def get_bias(source):
 	base_url = 'https://www.allsides.com/media-bias/media-bias-ratings?field_news_source_type_tid=All&field_news_bias_nid=1&title='
 	url = base_url + search_map[source]
@@ -86,23 +130,45 @@ def get_bias(source):
 	if response is not None:
 		html = BeautifulSoup(response, 'html.parser')
 		div = html.body.find('div', class_ = lambda class_: class_ and class_ == 'column')
-		view_content_div = div.contents[2].find('div', class_ = lambda class_ : class_ and class_ == 'view-content')
-		print(view_content_div)
+		
+		view_div = div.find('div', class_ = lambda class_: class_ and 'view-allsides-daily' in class_)
+		print(div.contents)
+		print("----------------------------------------------------------")
+		print(view_div.contents)
+		
+		
+		#div_entry = view_div.find('div', class_ = lambda class_: class_ and class_ == 'view-content')
+		#print(div_entry)
 		
 	else:
 		print('no response')
-	
+"""	
 	
 def get_source(link):
 	tokens = link.split('.')
-	site_name = tokens[1]
-	get_bias(site_name)
+	#print(tokens)
+	if 'com' in tokens[1] or 'go' in tokens[1]:
+		site_name = tokens[0].split('/')
+		site_name = site_name[2]
+		#print(site_name)
+	else:
+		site_name = tokens[1]
+	return site_name
+	#get_bias(site_name)
 	
-def print_data(link, title, rank):
-	print("-------------------------------------------------------")
+def print_data(website, title, rank):
+	print("-----------------------------------------------------------------------------------------------------")
 	print("{}: {}".format(rank, title))
-	print("link:", link)
+	print("source: {}".format(website.upper()))
+	if website in search_map.keys():
+		print("bias: {}".format(search_map[website]))
+	else:
+		print("No bias found.")
+		search_map[website] = "No bias found"
+		
 
 
 get_data()
-db.close()
+print("---------------------------------------------------------------------------------------------")
+assign_weight()
+#db.close()
