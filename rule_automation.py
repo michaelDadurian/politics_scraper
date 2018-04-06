@@ -9,7 +9,7 @@ import xlrd
 import csv
 import rule_automation_config as config
 import types
-
+from selenium.common.exceptions import NoSuchElementException
 
 """
 #Select rule set to edit
@@ -34,9 +34,25 @@ def open_file(workbook_link, worksheet_name):
 	
 def fix_rule_value(rule_value):
 	tokens = rule_value.split()
+	print("tokens:", tokens)
 	if len(tokens) > 1:
 		if tokens[1] == 'years':
-			return int(tokens[0])
+			return int(tokens[0]) * 12
+		if '$' in tokens[0]:
+			value = tokens[0].replace('$', '')
+			value = value.replace(',','')
+			return [int(value), int(tokens[2])]
+		if 'X' in tokens[0]:
+			value_string = ' '.join(tokens)
+			return re.findall(r'\d+', value_string)
+	
+	#Outstanding Unsecured Revolving
+	if '%' in tokens[0]:
+		value = tokens[0].replace('%','')
+		return float(value)
+		
+	if int(tokens[0][0]) <= 1:
+		return int(float(tokens[0]) * 100)
 	return int(float(tokens[0]))
 		
 		
@@ -45,35 +61,38 @@ def parse_excel():
 	counter = 0
 	rule_type_set = False
 	worksheet = open_file(config.WORKBOOK, config.WORKSHEET)
-	#rownum = 2
-	print("Num rows:", worksheet.nrows)
-	for rownum in range(2,worksheet.nrows):
+	rownum = 2
+	rule_set = ''
+	#go_to_rule_type(rule_set)
+	while rownum < worksheet.nrows:
 		row = worksheet.row(rownum)
+		print("curr row:", row)
 		if row[1].value == "" and row[2].value == "" and row[3].value == "" and rule_type_set == False:
 			if 'Pre-Screen Evaluation' in row[0].value:
 				rule_set = 'Prescreen'
 			elif 'Pre-Screen Decision' in row[0].value:
 				rule_set = 'Prescreen (Decision)'
-			elif 'Common-Evaluation' in row[0].value:
+			elif 'Common Evaluation' in row[0].value:
 				rule_set = 'Common'
 			elif 'Credit-Derogatory' in row[0].value:
 				rule_set = 'Common-Credit Derogatory'
 			
-			print(rule_set)
+			print("????", rule_set)
 			rule_type_set = True
 			go_to_rule_type(rule_set)
 			
-		elif row[2].value != "":
+		elif row[2].value != "" and row[3].value != 0:
 			if rule_set == 'Prescreen':
 				
 				rule = config.PRESCREEN_EVALUATION[row[0].value]
 				print("Rule:",rule)
 				if rule == 'SSNNotIssued-Applicant' or rule == 'SSNNotIssued-CoApplicant':
 					continue
-				print(row[2].value)
+				
 				rule_value = fix_rule_value(str(row[2].value))
 				rule_score = row[3].value
-				print(rule_value)
+				
+				print(row[2].value, rule_value)
 				rule_data = [rule, rule_value, rule_score]
 				
 				go_to_rule(rule)
@@ -88,12 +107,13 @@ def parse_excel():
 			
 			elif rule_set == 'Prescreen (Decision)':
 				rule = config.PRESCREEN_DECISION[row[0].value]
-				print(rule)
+				
+				print("row[2]:", str(row[2]))
 				rule_value = fix_rule_value(str(row[2].value))
 				rule_score = row[3].value
-				print(rule_value)
-				rule_data = [rule, rule_value, rule_score]
 				
+				rule_data = [rule, rule_value, rule_score]
+				print(row[2].value, rule_value)
 				go_to_rule(rule)
 				update_rule(rule, rule_value)
 				counter += 1
@@ -104,17 +124,127 @@ def parse_excel():
 					back_button.click()
 					rule_type_set = False
 				
+			elif rule_set == 'Common':
+				rule = config.COMMON[row[0].value]
+				if rule == 'MaximumTermBasedOnAgeOfVehicle':
+					values = []
+					for i in range(0,7):
+						values.append(int(worksheet.row(rownum+i)[2].value))
+						
+					rule_value = values
+					rownum += 6
+					
+				elif rule == 'MaximumTermBasedOnAmountFinanced':
+					values = []
+					
+					for i in range(0,2):
+						value = fix_rule_value(worksheet.row(rownum+i)[2].value)
+						values.append(value)
+					
+					#rule_value = values
+					rule_value  = [val for sublist in values for val in sublist]
+					print(rule_value)
+					rownum += 1
+					
+				else:
+
+					print("row[2]:", str(row[2]))
+					rule_value = fix_rule_value(str(row[2].value))
+					rule_score = row[3].value
+					
+					
+					print(row[2].value, rule_value)
+					
+				for i in range (2,5):
+					print("Searching for rule:", rule)
+					if check_page(rule):
+						go_to_rule(rule)
+						update_rule(rule, rule_value)
+						counter += 1
+						break
+					else:
+						if i == 4: break
+						browser.find_element_by_link_text(str(i)).click()
+						
+				
+						
+			elif rule_set == 'Common-Credit Derogatory':
+				rule = config.DEROGATORY_EVALUATION[row[0].value]
+				
+				rule_value = fix_rule_value(row[2].value)
+				print(rule_value)
+				go_to_rule(rule)
+				update_rule(rule, rule_value)
+				
+					
+	rownum += 1	
 			
 		
 		#print(rule_type)
 		#rownum += 1
+def update_rule(rule_name, rule_value):
+	
+	sleep(2)
+	field_inputs = browser.find_elements_by_xpath("//input")
+	if rule_name == 'OutstandingUnsecuredRevolvingDebt-Maximum':
+		new_input = "{}*${{applicants[0].currentEmployments[0].grossIncome}}".format(rule_value)
+		field_inputs[2].clear()
+		field_inputs[2].send_keys(new_input)
+		
+		browser.find_element_by_class_name('fa-times').click()
+		
+	elif rule_name == 'MaximumTermBasedOnAgeOfVehicle':
+		j = 0
+		
+		for i in range(1, 14, 2):
+			value = rule_value[j]
+			print(value)
+			field_inputs[i].clear()
+			field_inputs[i].send_keys(value)
+			
+			j += 1
+			
+	
+	elif rule_name == 'MaximumTermBasedOnAmountFinanced':
+		j = 0
+		for i in range(1, 5):
+			field_inputs[i].clear()
+			field_inputs[i].send_keys(str(rule_value[j]))
+			
+			j += 1
+			
+	elif 'MinimumNumberofTradelines' in rule_name:
+		field_inputs[2].clear()
+		field_inputs[2].send_keys(str(rule_value))
+		
+	elif 'Numberof306090' in rule_name:
+		j = 0
+		for i in range(2,4):
+			field_inputs[i].clear()
+			field_inputs[i].send_keys(rule_value[j])
+			j += 1
+	else:
+		field_inputs[1].clear()
+		field_inputs[1].send_keys(str(rule_value))
+	
+	
+	validate_save_back()
+	
 
+def check_page(rule):
+	#sleep(1)
+	try:
+		browser.find_element_by_partial_link_text(rule)
+	except NoSuchElementException:
+		print("No Element:", rule)
+		return False
+	return True
 def go_to_rule_type(rule_type):
 	browser.find_element_by_link_text(rule_type).click()
 	
 def go_to_rule(rule_name):
-	sleep(2)
-	browser.refresh()
+	print("HELLO", rule_name)
+	sleep(1)
 	update_link = browser.find_element_by_link_text(rule_name)
 	update_link.click()
 	
@@ -170,22 +300,7 @@ def update_description(rule_name, rule_value):
 	browser.execute_script("arguments[0].scrollIntoView();",update_button)
 	update_button.click()
 		
-def update_rule(rule_name, rule_value):
-	
-	sleep(2)
-	field_inputs = browser.find_elements_by_xpath("//input")
-	field_inputs[1].clear()
-	field_inputs[1].send_keys(str(rule_value))
-	
-	"""
-	for i in range(len(field_inputs)):
-		print(i)
-		field_inputs[i].clear()
-		field_inputs[i].send_keys(rule_value)
-	"""
-	
-	validate_save_back()
-	
+
 """
 for i in range (len(edit_buttons)):
 	sleep(1)
