@@ -32,12 +32,19 @@ def open_file(workbook_link, worksheet_name):
 	worksheet = workbook.sheet_by_name(worksheet_name)
 	return worksheet
 	
-def fix_rule_value(rule_value):
+def fix_rule_value(rule, rule_value):
 	tokens = rule_value.split()
 	print("tokens:", tokens)
+		
+	if 'age' in rule or 'Age' in rule or rule == 'PendingReferRule':
+		return int(float(tokens[0]))
+		
+	if 'Employ' in rule or 'Residence' in rule:
+		return int(float(tokens[0])) * 12
+		
 	if len(tokens) > 1:
 		if tokens[1] == 'years':
-			return int(tokens[0]) * 12
+			return int(tokens[0])
 		if '$' in tokens[0]:
 			value = tokens[0].replace('$', '')
 			value = value.replace(',','')
@@ -53,9 +60,35 @@ def fix_rule_value(rule_value):
 		
 	if int(tokens[0][0]) <= 1:
 		return int(float(tokens[0]) * 100)
+		
 	return int(float(tokens[0]))
 		
+def get_rule_set(row):
+	if 'Pre-Screen Evaluation' in row[0].value:
+		rule_set = 'Prescreen'
+	elif 'Pre-Screen Decision' in row[0].value:
+		rule_set = 'Prescreen (Decision)'
+	elif 'Common Evaluation' in row[0].value:
+		rule_set = 'Common'
+	elif 'Credit-Derogatory' in row[0].value:
+		rule_set = 'Common-Credit Derogatory'
 		
+	return rule_set
+	
+def go_back():
+	back_button = browser.find_element_by_xpath("//*[contains(text(), 'Back')]")
+	back_button.click()
+	
+def parse_rule(row, rule):
+	
+	rule_value = fix_rule_value(rule, str(row[2].value))
+	
+		
+	rule_score = row[3].value
+	
+	go_to_rule(rule)
+	update_rule(rule, rule_value)
+	
 
 def parse_excel():
 	counter = 0
@@ -67,61 +100,44 @@ def parse_excel():
 	while rownum < worksheet.nrows:
 		row = worksheet.row(rownum)
 		print("curr row:", row)
+		"""
+		Sets RuleSet and goes to correct page
+		"""
 		if row[1].value == "" and row[2].value == "" and row[3].value == "" and rule_type_set == False:
-			if 'Pre-Screen Evaluation' in row[0].value:
-				rule_set = 'Prescreen'
-			elif 'Pre-Screen Decision' in row[0].value:
-				rule_set = 'Prescreen (Decision)'
-			elif 'Common Evaluation' in row[0].value:
-				rule_set = 'Common'
-			elif 'Credit-Derogatory' in row[0].value:
-				rule_set = 'Common-Credit Derogatory'
-			
-			print("????", rule_set)
+			rule_set = get_rule_set(row)
 			rule_type_set = True
 			go_to_rule_type(rule_set)
 			
+			
+		
+		#Extracts rule data and updates rule
+		
 		elif row[2].value != "" and row[3].value != 0:
 			if rule_set == 'Prescreen':
 				
 				rule = config.PRESCREEN_EVALUATION[row[0].value]
 				print("Rule:",rule)
 				if rule == 'SSNNotIssued-Applicant' or rule == 'SSNNotIssued-CoApplicant':
+					rownum += 1
 					continue
 				
-				rule_value = fix_rule_value(str(row[2].value))
-				rule_score = row[3].value
-				
-				print(row[2].value, rule_value)
-				rule_data = [rule, rule_value, rule_score]
-				
-				go_to_rule(rule)
-				update_rule(rule, rule_value)
+				parse_rule(row, rule)
 				counter += 1
 				
 				if counter == 4:
 					print("prescreen done")
-					back_button = browser.find_element_by_xpath("//*[contains(text(), 'Back')]")
-					back_button.click()
+					go_back()
 					rule_type_set = False
 			
 			elif rule_set == 'Prescreen (Decision)':
 				rule = config.PRESCREEN_DECISION[row[0].value]
 				
-				print("row[2]:", str(row[2]))
-				rule_value = fix_rule_value(str(row[2].value))
-				rule_score = row[3].value
-				
-				rule_data = [rule, rule_value, rule_score]
-				print(row[2].value, rule_value)
-				go_to_rule(rule)
-				update_rule(rule, rule_value)
+				parse_rule(row, rule)
 				counter += 1
 				
 				if counter == 5:
 					print("prescreen decision done")
-					back_button = browser.find_element_by_xpath("//*[contains(text(), 'Back')]")
-					back_button.click()
+					go_back()
 					rule_type_set = False
 				
 			elif rule_set == 'Common':
@@ -138,22 +154,18 @@ def parse_excel():
 					values = []
 					
 					for i in range(0,2):
-						value = fix_rule_value(worksheet.row(rownum+i)[2].value)
+						value = fix_rule_value(rule, worksheet.row(rownum+i)[2].value)
 						values.append(value)
 					
 					#rule_value = values
 					rule_value  = [val for sublist in values for val in sublist]
-					print(rule_value)
 					rownum += 1
 					
 				else:
 
-					print("row[2]:", str(row[2]))
-					rule_value = fix_rule_value(str(row[2].value))
+					rule_value = fix_rule_value(rule, str(row[2].value))
 					rule_score = row[3].value
 					
-					
-					print(row[2].value, rule_value)
 					
 				for i in range (2,5):
 					print("Searching for rule:", rule)
@@ -166,19 +178,26 @@ def parse_excel():
 						if i == 4: break
 						browser.find_element_by_link_text(str(i)).click()
 						
+				if counter == 25:
+					print("common done")
+					go_back()
+					rule_type_set = False
+						
 				
 						
 			elif rule_set == 'Common-Credit Derogatory':
 				rule = config.DEROGATORY_EVALUATION[row[0].value]
 				
-				rule_value = fix_rule_value(row[2].value)
-				print(rule_value)
-				go_to_rule(rule)
-				update_rule(rule, rule_value)
+				parse_rule(row, rule)
+				counter += 1
+				
+				if counter == 26:
+					break
 				
 					
-	rownum += 1	
-			
+		rownum += 1	
+	
+	print("Rule's updated")
 		
 		#print(rule_type)
 		#rownum += 1
@@ -363,7 +382,7 @@ select_loan = browser.find_element_by_class_name('ui-select-container')
 select_loan.click()
 
 #Set loan type here
-loan_type = config.AUTO_INDIRECT
+loan_type = config.MOTORCYCLE
 set_loan_type(loan_type)
 
 
