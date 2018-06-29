@@ -11,13 +11,23 @@ import rule_automation_config as config
 import types
 from selenium.common.exceptions import NoSuchElementException
 
-"""
-#Select rule set to edit
-prescreen = 'Prescreen'
-prescreen_link = browser.find_element_by_link_text(prescreen)
-prescreen_link.click()
-"""
 
+		
+def login():
+	compid = browser.find_element_by_id("companyid")
+	user = browser.find_element_by_id('username')
+	password = browser.find_element_by_id('password')
+
+	compid.send_keys(config.TEST_COMPID)
+	user.send_keys(config.TEST_USER)
+	password.send_keys(config.TEST_PASS)
+
+	login_attempt = browser.find_element_by_xpath("//*[@type='submit']")
+	login_attempt.submit()
+	
+	sleep(2)
+	
+		
 rule_set = ''
 rule = ''
 rule_value = ''
@@ -27,10 +37,24 @@ rule_data = []
 #workbook_link = 'Marine Underwriting Rules 3.28.18.xlsx'
 #worksheet_name = 'Underwriting Rules'
 
+def check_page(self, Rule):
+	try:
+		driver.find_element_by_partial_link_text(rule)
+		
+	except NoSuchElementException:
+		print("No Element:", rule)
+		return False
+		
+	return True
+	
+	
 def open_file(workbook_link, worksheet_name):
 	workbook = xlrd.open_workbook(workbook_link)
 	worksheet = workbook.sheet_by_name(worksheet_name)
 	return worksheet
+	
+	
+	
 	
 def fix_rule_value(rule, rule_value):
 	tokens = rule_value.split()
@@ -79,15 +103,18 @@ def go_back():
 	back_button = browser.find_element_by_xpath("//*[contains(text(), 'Back')]")
 	back_button.click()
 	
+	
 def parse_rule(row, rule):
 	
 	rule_value = fix_rule_value(rule, str(row[2].value))
-	
-		
 	rule_score = row[3].value
+	
+	rule_obj = Rule(rule, [rule_value], rule_score, rule_set)
+	rule_data.append(rule_obj)
 	
 	go_to_rule(rule)
 	update_rule(rule, rule_value)
+
 	
 
 def parse_excel():
@@ -96,13 +123,12 @@ def parse_excel():
 	worksheet = open_file(config.WORKBOOK, config.WORKSHEET)
 	rownum = 2
 	rule_set = ''
-	#go_to_rule_type(rule_set)
+	
 	while rownum < worksheet.nrows:
 		row = worksheet.row(rownum)
 		print("curr row:", row)
-		"""
-		Sets RuleSet and goes to correct page
-		"""
+		
+		#Sets RuleSet and goes to correct page
 		if row[1].value == "" and row[2].value == "" and row[3].value == "" and rule_type_set == False:
 			rule_set = get_rule_set(row)
 			rule_type_set = True
@@ -111,7 +137,6 @@ def parse_excel():
 			
 		
 		#Extracts rule data and updates rule
-		
 		elif row[2].value != "" and row[3].value != 0:
 			if rule_set == 'Prescreen':
 				
@@ -157,7 +182,6 @@ def parse_excel():
 						value = fix_rule_value(rule, worksheet.row(rownum+i)[2].value)
 						values.append(value)
 					
-					#rule_value = values
 					rule_value  = [val for sublist in values for val in sublist]
 					rownum += 1
 					
@@ -199,8 +223,7 @@ def parse_excel():
 	
 	print("Rule's updated")
 		
-		#print(rule_type)
-		#rownum += 1
+
 def update_rule(rule_name, rule_value):
 	
 	sleep(2)
@@ -267,15 +290,7 @@ def go_to_rule(rule_name):
 	update_link = browser.find_element_by_link_text(rule_name)
 	update_link.click()
 	
-"""
-#Select rule name
-rule_name = 'MaximumAgeofVehicle'
-rule_value = '25'
-rule_score = '2'
 
-sleep(2)
-edit_buttons = browser.find_elements_by_class_name('fa-pencil-square-o')
-"""
 def validate_save_back():
 	validate_button = browser.find_element_by_xpath("//*[contains(text(), 'Validate')]")
 	validate_button.click()
@@ -320,26 +335,7 @@ def update_description(rule_name, rule_value):
 	update_button.click()
 		
 
-"""
-for i in range (len(edit_buttons)):
-	sleep(1)
-	browser.refresh()
-	
-	
-	#existing_name = browser.find_element_by_id('formly_1_input_ruleName_0')
-	#existing_name = existing_name.get_attribute('value')
-	
-	#instead of rule_name, get value from dictionary. rules from excel sheet will be mapped to rule names on website
-	#if rule_name == existing_name:
-	
-	#Update description
-	update_description(rule_name, rule_value)
-	
-	
-	update_rule(rule_name, rule_value)
 
-	sleep(1)
-"""	
 	
 def set_loan_type(loan_type):
 	browser.find_element_by_id(loan_type).click()
@@ -348,9 +344,9 @@ def set_rule_profile(rule_profile):
 	browser.find_element_by_partial_link_text(rule_profile).click()
 	
 	
+###################################################################################################################################################################################
 	
-#if __name__ == '__main__':
-
+	
 #Get website
 browser = webdriver.Chrome()
 browser.get('https://test.decisionlender.solutions/tci/#/auth/login/?returnTo=%2Fauth%2Flogin%2F')
@@ -358,16 +354,7 @@ browser.maximize_window()
 browser.implicitly_wait(10)
 
 #Sign in
-compid = browser.find_element_by_id("companyid")
-user = browser.find_element_by_id('username')
-password = browser.find_element_by_id('password')
-
-compid.send_keys(config.TEST_COMPID)
-user.send_keys(config.TEST_USER)
-password.send_keys(config.TEST_PASS)
-
-login_attempt = browser.find_element_by_xpath("//*[@type='submit']")
-login_attempt.submit()
+login()
 
 #Go to rules
 sleep(2)

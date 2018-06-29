@@ -42,12 +42,15 @@ DEROGATORY_EVALUATION = {'Combined Number of 30,60,90 days Delinquencies in past
 
 TEST_COMPID = 'mich320'
 TEST_USER = 'mdadurian'
-TEST_PASS = 'Wafflefries12@'
+
+#placeholder
+TEST_PASS = '*************'
 
 
 
 AUTO_INDIRECT = 'Auto Indirect'
 MARINE = 'Marine'
+MOTORCYCLE = 'Motorcycle'
 RV = 'RV'
 
 
@@ -55,5 +58,5 @@ DEFAULT_LITE = 'DL4 Lite Profile'
 
 
 
-WORKBOOK = 'Marine Underwriting Rules 3.28.18.xlsx'
+WORKBOOK = 'Motorcycle Underwriting Rules 3.27.18.xlsx'
 WORKSHEET = 'Underwriting Rules'
